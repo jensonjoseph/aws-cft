@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Squad ES Security Group
+Parameters:
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: Name of the VPC
+    Default: vpc-25de4c41
+    MinLength: 1
+  App:
+    Description: Squad ES Security Group
+    Type: String
+    Default: squad
+  Env:
+    Description: Which environment are you provisioning to? (prod, qa, dev, mdev)
+    Type: String
+    Default: mdev
+    AllowedValues:
+      - qa
+      - dev
+      - mdev
+      - prod
+  UAI:
+    Description: Lowercase UAI for billing purposes
+    Type: String
+    Default: uai2007935
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: squad-es-security-group
+      GroupDescription: Security group for Squads Elasticsearch
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 10.0.0.0/8
+          FromPort: 80
+          ToPort: 80
+        - IpProtocol: tcp
+          CidrIp: 10.0.0.0/8
+          FromPort: 443
+          ToPort: 443
+        - IpProtocol: tcp
+          CidrIp: 10.0.0.0/8
+          FromPort: 9300
+          ToPort: 9300
+        - IpProtocol: tcp
+          CidrIp: 10.0.0.0/8
+          FromPort: 9200
+          ToPort: 9200
+
+      Tags:
+        - Key: Name
+          Value: !Ref App
+        - Key: env
+          Value: !Ref Env
+        - Key: uai
+          Value: !Ref UAI
