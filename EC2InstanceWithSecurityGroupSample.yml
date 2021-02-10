@@ -36,6 +36,76 @@ Mappings:
 Resources:
   EC2Instance:
     Type: 'AWS::EC2::Instance'
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          ascending:
+            - install_cfn
+            - prep-commands
+            - execute-commands
+        prep-commands:
+          files:
+            /tmp/install-git:
+              content: !Sub |
+                #!/bin/bash -xe
+                echo JJK-installing-git-unzip
+                yum install -y jq unzip git
+              group: root
+              mode: '000500'
+              owner: root
+            /tmp/test-failing-command:
+              content: !Sub |
+                #!/bin/bash -xe
+                echo123 Test-failing-command
+              group: root
+              mode: '000500'
+              owner: root
+            /tmp/commands-after-failure:
+              content: !Sub |
+                #!/bin/bash -xe
+                echo after-failed-command
+              group: root
+              mode: '000500'
+              owner: root
+        execute-commands:
+          commands:
+            01_install-git:
+              command: /tmp/install-git
+              ignoreErrors: true
+            02_test-failing-command:
+              command: /tmp/test-failing-command
+              ignoreErrors: true
+            03_commands-after-failure:
+              command: /tmp/commands-after-failure
+              ignoreErrors: true
+        install_cfn:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack= ${AWS::StackId}
+                region=${AWS::Region}
+              group: root
+              mode: '000400'
+              owner: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.WebServer.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2Instance --configsets ascending --url https://stackbuilder.amazonaws.com
+              group: root
+              mode: '000400'
+              owner: root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+
     Properties:
       InstanceType: !Ref InstanceType
       SecurityGroups:
@@ -53,41 +123,8 @@ Resources:
           #!/bin/bash -xe
           echo JJK-updating-yum
           sudo yum update -y
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource EC2Instance --configsets ascending --region ${AWS::Region}
           echo JJK-user-data-install-complete
-    Metadata:
-      AWS::CloudFormation::Init:
-        configSets:
-          ascending:
-            - "config1"
-            - "config2"
-            - "config3"
-            - "config4"
-            - "config5"
-        config1:
-          commands:
-            01_command:
-              command: !Sub |
-               "echo JJK-installing-git-unzip"
-        config2:
-          commands:
-            02_command:
-              command: !Sub |
-               "yum install -y jq unzip git"
-        config3:
-          commands:
-            03_command:
-              command: !Sub |
-               "echo Test-failing-command"
-        config4:
-          commands:
-            04_command:
-              command: !Sub |
-               "/opt/aws/bin/cfn-init -v --stack \"${AWS::StackName}\" --resource LaunchConfig --region \"${AWS::Region}\""
-        config5:
-          commands:
-            05_command:
-              command: !Sub |
-               "echo after-failed-command"
 
   InstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
