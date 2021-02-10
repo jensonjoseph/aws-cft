@@ -1,0 +1,1 @@
+User data is added in `/var/lib/cloud/instance/scripts/part-001`
