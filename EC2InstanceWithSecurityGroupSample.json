@@ -1,0 +1,221 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS CloudFormation Sample Template EC2InstanceWithSecurityGroupSample: Create an Amazon EC2 instance running the Amazon Linux AMI. The AMI is chosen based on the region in which the stack is run. This example creates an EC2 security group for the instance to give you SSH access. **WARNING** This template creates an Amazon EC2 instance. You will be billed for the AWS resources used if you create a stack from this template.",
+  "Parameters": {
+    "KeyName": {
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+    },
+    "InstanceType": {
+      "Description": "WebServer EC2 instance type",
+      "Type": "String",
+      "Default": "t2.micro",
+      "ConstraintDescription": "must be a valid EC2 instance type."
+    },
+    "SSHLocation": {
+      "Description": "The IP address range that can be used to SSH to the EC2 instances",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    }
+  },
+  "Mappings": {
+    "AWSInstanceType2Arch": {
+      "t2.micro": {
+        "Arch": "HVM64"
+      }
+    },
+    "AWSRegionArch2AMI": {
+      "us-east-1": {
+        "HVM64": "ami-032930428bf1abbff",
+        "HVMG2": "ami-0aeb704d503081ea6"
+      }
+    }
+  },
+  "Resources": {
+    "EC2Instance": {
+      "Type": "AWS::EC2::Instance",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "ascending": [
+              "install_cfn",
+              "prep-commands",
+              "execute-commands"
+            ]
+          },
+          "prep-commands": {
+            "files": {
+              "/tmp/install-git": {
+                "content": {
+                  "Fn::Join":["",
+                    "#!/bin/bash -xe\n",
+                    "echo JJK-installing-git-unzip\n",
+                    "yum install -y jq unzip git\n"
+                  ]
+                },
+                "group": "root",
+                "mode": "000500",
+                "owner": "root"
+              },
+              "/tmp/test-failing-command": {
+                "content": {
+                  "Fn::Sub": "#!/bin/bash -xe\necho123 Test-failing-command\n"
+                },
+                "group": "root",
+                "mode": "000500",
+                "owner": "root"
+              },
+              "/tmp/commands-after-failure": {
+                "content": {
+                  "Fn::Sub": "#!/bin/bash -xe\necho after-failed-command\n"
+                },
+                "group": "root",
+                "mode": "000500",
+                "owner": "root"
+              }
+            }
+          },
+          "execute-commands": {
+            "commands": {
+              "01_install-git": {
+                "command": "/tmp/install-git",
+                "ignoreErrors": true
+              },
+              "02_test-failing-command": {
+                "command": "/tmp/test-failing-command",
+                "ignoreErrors": true
+              },
+              "03_commands-after-failure": {
+                "command": "/tmp/commands-after-failure",
+                "ignoreErrors": true
+              }
+            }
+          },
+          "install_cfn": {
+            "files": {
+              "/etc/cfn/cfn-hup.conf": {
+                "content": {
+                  "Fn::Sub": "[main]\nstack= ${AWS::StackId}\nregion=${AWS::Region}\n"
+                },
+                "group": "root",
+                "mode": "000400",
+                "owner": "root"
+              },
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                "content": {
+                  "Fn::Sub": "[cfn-auto-reloader-hook]\ntriggers=post.update\npath=Resources.WebServer.Metadata.AWS::CloudFormation::Init\naction=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2Instance --configsets ascending --url https://stackbuilder.amazonaws.com\n"
+                },
+                "group": "root",
+                "mode": "000400",
+                "owner": "root"
+              }
+            },
+            "services": {
+              "sysvinit": {
+                "cfn-hup": {
+                  "enabled": true,
+                  "ensureRunning": true,
+                  "files": [
+                    "/etc/cfn/cfn-hup.conf",
+                    "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "InstanceSecurityGroup"
+          }
+        ],
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "ImageId": {
+          "Fn::FindInMap": [
+            "AWSRegionArch2AMI",
+            {
+              "Ref": "AWS::Region"
+            },
+            {
+              "Fn::FindInMap": [
+                "AWSInstanceType2Arch",
+                {
+                  "Ref": "InstanceType"
+                },
+                "Arch"
+              ]
+            }
+          ]
+        },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": "#!/bin/bash -xe\necho JJK-updating-yum\nsudo yum update -y\n/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource EC2Instance --configsets ascending --region ${AWS::Region}\necho JJK-user-data-install-complete\n"
+          }
+        }
+      }
+    },
+    "InstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable SSH access via port 22",
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "CidrIp": {
+              "Ref": "SSHLocation"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "InstanceId": {
+      "Description": "InstanceId of the newly created EC2 instance",
+      "Value": {
+        "Ref": "EC2Instance"
+      }
+    },
+    "AZ": {
+      "Description": "Availability Zone of the newly created EC2 instance",
+      "Value": {
+        "Fn::GetAtt": [
+          "EC2Instance",
+          "AvailabilityZone"
+        ]
+      }
+    },
+    "PublicDNS": {
+      "Description": "Public DNSName of the newly created EC2 instance",
+      "Value": {
+        "Fn::GetAtt": [
+          "EC2Instance",
+          "PublicDnsName"
+        ]
+      }
+    },
+    "PublicIP": {
+      "Description": "Public IP address of the newly created EC2 instance",
+      "Value": {
+        "Fn::GetAtt": [
+          "EC2Instance",
+          "PublicIp"
+        ]
+      }
+    }
+  }
+}
