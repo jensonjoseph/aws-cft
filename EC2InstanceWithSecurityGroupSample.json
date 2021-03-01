@@ -52,10 +52,10 @@
             "files": {
               "/tmp/install-git": {
                 "content": {
-                  "Fn::Join":["",
+                  "Fn::Join": ["",[
                     "#!/bin/bash -xe\n",
                     "echo JJK-installing-git-unzip\n",
-                    "yum install -y jq unzip git\n"
+                    "yum install -y jq unzip git\n"]
                   ]
                 },
                 "group": "root",
