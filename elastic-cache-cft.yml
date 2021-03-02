@@ -111,6 +111,11 @@ Resources:
           IpProtocol: tcp
           FromPort: !If [ IsRedis, 6379, 11211]
           ToPort: !If [ IsRedis, 6379, 11211]
+          CidrIp: 10.0.0.0/8
+          Description: 'Elastic Cache Ingress'
+        - IpProtocol: tcp
+          FromPort: !If [ IsRedis, 6379, 11211 ]
+          ToPort: !If [ IsRedis, 6379, 11211 ]
           CidrIp: 3.0.0.0/8
           Description: 'Elastic Cache Ingress'
       Tags:
